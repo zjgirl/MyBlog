@@ -1,0 +1,33 @@
+<!doctype html>
+<title>{% block title %}{% endblock %} - My Blog</title>
+<link rel='stylesheet', href='{{url_for('static',filename='style.css')}}'>
+
+<h1>My Blog</h1>
+<ul class="nav navbar-nav navbar-right">
+	{% if current_user.is_authenticated %}
+		<li><a href="{{url_for('auth.logout')}}">Log Out</a>		
+	{% else %}
+		<li><a href="{{url_for('auth.login')}}">Log In</a>
+	{% endif %}
+</ul>
+
+<head>
+{% block header %}
+{% endblock %}
+</head>
+
+<body>
+<div class="container">
+	{% for message in get_flashed_messages() %}
+	<div class="alert alert-warning">
+	<button type="button" class="close" data-dismiss="alert">&times;</button>
+	{{message}}
+	</div>
+	{% endfor %}
+</div>
+{% block content %}
+	
+{% endblock %}
+</body>
+
+
