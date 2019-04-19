@@ -12,7 +12,7 @@ def register():
         if User.query.filter_by(username=form.username.data).first():
             flash('The username is registered!')
             return render_template('auth/register.html', form=form)
-        User.addUser(form.username.data, form.password.data)
+        User.addUser(form.username.data, form.password.data, form.email.data)
         flash('Register Successfully!')
         return redirect(url_for('auth.login'))   
     return render_template('auth/register.html', form=form)
@@ -27,7 +27,7 @@ def login():
             login_user(user, form.remember_me.data) #record the current user in session
             next = request.args.get('next') # if the login operation is mandatory, once login, go to that page directly
             if not next:
-                next = url_for('main.user', username=user.username)
+                next = url_for('main.index')
             return redirect(next)
         flash('Invalid username or password!') 
     return render_template('auth/login.html', form=form)

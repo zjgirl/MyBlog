@@ -13,7 +13,12 @@ manager = Manager(app)
 
 @app.shell_context_processor
 def make_shell_context():
-    return dict(db=db, User=User, Role=Role)
+    return dict(db=db, User=User, Post=Post, Role=Role, Permission=Permission)
+
+# this make 'Permission' can be used in Jinja
+@app.context_processor
+def make_context():
+    return dict(Permission=Permission)
 
 manager.add_command('shell', Shell(make_context=make_shell_context))
 manager.add_command('db', MigrateCommand) #add command 'db'
