@@ -1,6 +1,6 @@
 from . import main
 from flask_login import login_required, current_user
-from flask import render_template, redirect, flash, url_for,request, abort
+from flask import render_template, redirect, flash, url_for,request,make_response, abort
 from ..model import User, Post, Permission
 from ..auth.form import LoginForm
 from .form import ProfileForm, PostForm
@@ -17,9 +17,29 @@ def index():
         db.session.add(post)
         db.session.commit()      
         return redirect(url_for('.index'))
-    pagination = Post.query.order_by(Post.timestamp.desc()).paginate(page,error_out=False)
+    show_follow_posts = bool(request.cookies.get('show_follow_posts', ''))
+    if show_follow_posts:
+        query = current_user.follow_posts
+    else:
+        query = Post.query
+    pagination = query.order_by(Post.timestamp.desc()).paginate(page,error_out=False)
     posts = pagination.items
-    return render_template('index.html',form = form, posts=posts, pagination=pagination)
+    return render_template('index.html',form = form, posts=posts, pagination=pagination, show_follow_posts=show_follow_posts)
+
+@main.route('/all')
+@login_required
+def show_all():
+    resp = make_response(redirect(url_for('.index')))
+    resp.set_cookie('show_follow_posts', '', max_age=30*24*60*60)
+    return resp
+
+@main.route('/follow')
+@login_required
+def show_follow():
+    resp = make_response(redirect(url_for('.index')))
+    resp.set_cookie('show_follow_posts', '1', max_age=30*24*60*60)
+    return resp
+
 
 #show profile
 @main.route('/user/<username>')
@@ -79,6 +99,39 @@ def delete_post(id):
     db.session.commit()
     flash('You have removed a post.')
     return redirect(url_for('.index'))
+    
+@main.route('/follow/<username>')
+@login_required
+def follow(username):
+    user = User.query.filter_by(username=username).first()  
+    current_user.following(user)  
+    return redirect(url_for('.user', username=username))
+
+@main.route('/unfollow/<username>')
+@login_required
+def unfollow(username):
+    user = User.query.filter_by(username=username).first()  
+    current_user.unfollowing(user)  
+    return redirect(url_for('.user', username=username)) 
+
+@main.route('/followers/<username>')
+@login_required
+def followers(username):
+    page = request.args.get('page', 1, type=int)
+    user = User.query.filter_by(username=username).first()
+    pagination = user.followers.paginate(page,error_out=False) #retrun the list that conatins the obj
+    follows = [{'user':item.followers, 'timestamp':item.timestamp} for item in pagination.items]
+    return render_template('followers.html', endpoint='.followers', user=user,follows=follows, pagination=pagination)
+
+@main.route('/followed/<username>')
+@login_required
+def followed(username):
+    page = request.args.get('page', 1, type=int)
+    user = User.query.filter_by(username=username).first()
+    pagination = user.followed.paginate(page,error_out=False)
+    followed = [{'user':item.followed, 'timestamp':item.timestamp} for item in pagination.items]
+    return render_template('followers.html',endpoint='.followed', user=user, follows=followed, pagination=pagination)
+
         
 
 

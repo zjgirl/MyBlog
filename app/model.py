@@ -62,8 +62,28 @@ class Role(db.Model):
             role.default = (default_role == r)
             db.session.add(role)
         db.session.commit()
-                
-                
+        
+class Post(db.Model):
+    __tablename__ = 'posts'
+    id = db.Column(db.INTEGER, primary_key = True, autoincrement = True)
+    body = db.Column(db.TEXT, nullable = False)
+    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
+    author_id = db.Column(db.INTEGER, db.ForeignKey('user.id'))
+
+    body_html = db.Column(db.TEXT) #for markdown text
+
+    @staticmethod
+    def on_changed_body(target, value, oldvalue, initiator):
+        allowed_tags = [ 'a', 'p', 'h1', 'h2', 'h3', 'abbr', 'acronym', 'b', 'blockquote', 'code',
+        'em', 'i', 'li', 'ul', 'ol', 'pre', 'strong']
+        target.body_html = bleach.linkify(bleach.clean(markdown(value, output_format='html'),
+                                            tags=allowed_tags, strip=True))
+
+class Follow(db.Model):
+    __tablename__ = "follow"
+    follower_id = db.Column(db.Integer, db.ForeignKey('user.id'), primary_key = True) #fans
+    followed_id = db.Column(db.Integer, db.ForeignKey('user.id'), primary_key = True) #star
+    timestamp = db.Column(db.DateTime, default = datetime.utcnow)                     
 
 #define user table
 class User(UserMixin, db.Model):
@@ -72,7 +92,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(128), unique = True)
     email = db.Column(db.String(128))
     password_hash = db.Column(db.String(128), nullable = False) #can't be null
-    role_id = db.Column(db.Integer, db.ForeignKey('role.id'))
+    role_id = db.Column(db.Integer, db.ForeignKey('role.id')) #
 
     name = db.Column(db.String(64))
     location = db.Column(db.String(64))
@@ -83,6 +103,20 @@ class User(UserMixin, db.Model):
     avatar = db.Column(db.String(128))
 
     post = db.relationship('Post', backref='author', lazy='dynamic') # build relationship with Post
+
+    # follow me
+    followers = db.relationship('Follow', 
+                                foreign_keys=[Follow.followed_id],
+                                backref=db.backref('followed', lazy='joined'), 
+                                lazy='dynamic', 
+                                cascade='all, delete-orphan')
+    # I followed
+    followed = db.relationship('Follow', 
+                                foreign_keys=[Follow.follower_id],
+                                backref=db.backref('followers', lazy='joined'), 
+                                lazy='dynamic', 
+                                cascade='all, delete-orphan')
+
     
     def __init__(self, **kwargs):
         super(User, self).__init__(**kwargs)
@@ -128,7 +162,37 @@ class User(UserMixin, db.Model):
             url = 'https://cdn.v2ex.com/gravatar'
             hash = hashlib.md5(self.email.lower().encode('utf-8')).hexdigest()
             return '{url}/{hash}?s={size}&d={default}&r={rating}'.format(url=url,hash=hash,size=size,default=default,rating=rating)
+    
+        
+    def following(self, user):
+        if not self.is_following(user):
+            f = Follow(followed=user, followers=self)
+            db.session.add(f)
+            db.session.commit()
+        
             
+    def unfollowing(self, user):
+        f = self.followed.filter_by(followed_id = user.id).first()
+        if f:
+            db.session.delete(f)
+            db.session.commit()
+
+    def is_following(self, user):
+        if not user.id:
+            return False
+        else:
+            return self.followed.filter_by(followed_id = user.id).first() is not None
+
+    def is_followed_by(self, user):
+        if not user.id:
+            return False
+        else:
+            return self.followers.filter_by(follower_id = user.id).first() is not None
+            
+    @property
+    def follow_posts(self):
+        return Post.query.join(Follow, Follow.followed_id==Post.author_id).filter(Follow.follower_id==self.id)
+          
     
 # define this class, we don't need to see whether user is login when we want to check his perm
 class AnonymousUser(AnonymousUserMixin):
@@ -140,21 +204,7 @@ class AnonymousUser(AnonymousUserMixin):
 login_manager.anonymous_user = AnonymousUser
   
         
-class Post(db.Model):
-    __tablename__ = 'posts'
-    id = db.Column(db.INTEGER, primary_key = True, autoincrement = True)
-    body = db.Column(db.TEXT, nullable = False)
-    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
-    author_id = db.Column(db.INTEGER, db.ForeignKey('user.id'))
 
-    body_html = db.Column(db.TEXT) #for markdown text
-
-    @staticmethod
-    def on_changed_body(target, value, oldvalue, initiator):
-        allowed_tags = [ 'a', 'p', 'h1', 'h2', 'h3', 'abbr', 'acronym', 'b', 'blockquote', 'code',
-        'em', 'i', 'li', 'ul', 'ol', 'pre', 'strong']
-        target.body_html = bleach.linkify(bleach.clean(markdown(value, output_format='html'),
-                                            tags=allowed_tags, strip=True))
                             
 from . import login_manager
 
